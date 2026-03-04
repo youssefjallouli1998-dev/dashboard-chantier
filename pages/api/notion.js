@@ -2,9 +2,7 @@ export default async function handler(req, res) {
   if (req.method !== "POST") return res.status(405).end();
   const { ds } = req.body;
 
-  const dbId = ds.replace("collection://", "");
-
-  const response = await fetch(`https://api.notion.com/v1/databases/${dbId}/query`, {
+  const response = await fetch(`https://api.notion.com/v1/databases/${ds}/query`, {
     method: "POST",
     headers: {
       "Authorization": "Bearer " + process.env.NOTION_TOKEN,
