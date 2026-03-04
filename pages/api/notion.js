@@ -1,11 +1,7 @@
 export default async function handler(req, res) {
   if (req.method !== "POST") return res.status(405).end();
   const { ds } = req.body;
-
-  // Enlève les tirets pour l'API Notion
-  const dbId = ds.replace(/-/g, "");
-
-  const response = await fetch(`https://api.notion.com/v1/databases/${dbId}/query`, {
+  const response = await fetch(`https://api.notion.com/v1/databases/${ds}/query`, {
     method: "POST",
     headers: {
       "Authorization": "Bearer " + process.env.NOTION_TOKEN,
@@ -14,10 +10,8 @@ export default async function handler(req, res) {
     },
     body: JSON.stringify({ page_size: 100 }),
   });
-
   const data = await response.json();
   if (!data.results) return res.json({ taches: [], debug: data });
-
   const taches = data.results.map(p => ({
     nom:   p.properties["Travaux à faire "]?.title?.[0]?.plain_text || p.properties["Travaux à faire"]?.title?.[0]?.plain_text || "",
     etat:  p.properties["État"]?.status?.name || "",
@@ -25,6 +19,5 @@ export default async function handler(req, res) {
     ent:   p.properties["Entreprises"]?.select?.name || p.properties["Entreprises "]?.select?.name || "",
     date:  p.properties["Date début "]?.date?.start || p.properties["Date début"]?.date?.start || p.properties["Date"]?.date?.start || "",
   })).filter(t => t.nom.trim() !== "");
-
   res.json({ taches });
 }
