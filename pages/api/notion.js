@@ -25,8 +25,8 @@ export default async function handler(req, res) {
   const taches = data.results.map(p => {
     const props = p.properties;
 
-    const nomProp = getProp(props, "Travaux à faire ", "Travaux à faire");
-    const nom = nomProp?.title?.[0]?.plain_text || "";
+    const nomProp = getProp(props, "Travaux à faire ", "Travaux à faire", "Priorité ", "Priorité", "Nom", "Name");
+    const nom = nomProp?.title?.[0]?.plain_text || nomProp?.rich_text?.[0]?.plain_text || nomProp?.text?.[0]?.plain_text || "";
 
     const etatProp = getProp(props, "État", "Etat");
     const etat = etatProp?.status?.name || "";
@@ -34,14 +34,14 @@ export default async function handler(req, res) {
     const chiffProp = getProp(props, "Chiffrage ", "Chiffrage");
     const chiff = chiffProp?.select?.name || "";
 
-    const entProp = getProp(props, "Entreprises", "Entreprise");
+    const entProp = getProp(props, "Entreprises", "Entreprises ", "Entreprise");
     const ent = entProp?.select?.name || "";
 
     const dateProp = getProp(props, "Date début ", "Date début", "Date");
     const date = dateProp?.date?.start || "";
 
     return { nom, etat, chiff, ent, date };
-  });
+  }).filter(t => t.nom && t.nom.trim() !== "");
 
   res.json({ taches });
 }
