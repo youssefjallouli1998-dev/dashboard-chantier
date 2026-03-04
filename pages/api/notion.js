@@ -2,7 +2,7 @@ export default async function handler(req, res) {
   if (req.method !== "POST") return res.status(405).end();
   const { ds } = req.body;
 
-  const dbId = ds.replace("collection://", "").replace(/-/g, "");
+  const dbId = ds.replace("collection://", "");
 
   const response = await fetch(`https://api.notion.com/v1/databases/${dbId}/query`, {
     method: "POST",
@@ -15,7 +15,8 @@ export default async function handler(req, res) {
   });
 
   const data = await response.json();
-  if (!data.results) return res.json({ taches: [] });
+
+  if (!data.results) return res.json({ taches: [], debug: data });
 
   const taches = data.results.map(p => ({
     nom:   p.properties["Travaux à faire"]?.title?.[0]?.plain_text || "",
