@@ -1,14 +1,15 @@
 import { useState } from "react";
 
 const CHANTIERS = [
-  { id:"challan", nom:"Challancin",          site:"HEGP", color:"#58a6ff", ds:"collection://3069c204-2fc5-80ab-b3d9-000b81016b18" },
-  { id:"ph1",     nom:"VGR Phase 1",          site:"VGR",  color:"#3fb950", ds:"collection://2949c204-2fc5-80a5-a534-000bdfde1468" },
-  { id:"ph2",     nom:"VGR Phase 2",          site:"VGR",  color:"#bc8cff", ds:"collection://b03ca79b-e694-4b36-9eaf-c95d8a76db74" },
-  { id:"ph3",     nom:"VGR Phase 3",          site:"VGR",  color:"#f0883e", ds:"collection://c03361da-f3d7-40bd-a5cc-de639e09a2a3" },
-  { id:"cobas",   nom:"DMU COBAS 5800",       site:"HEGP", color:"#58a6ff", ds:"collection://2b09c204-2fc5-811f-8826-000bfada1d0e" },
-  { id:"immu",    nom:"DMU Immunologie",      site:"HEGP", color:"#58a6ff", ds:"collection://3039c204-2fc5-800c-89b5-000bf2002e01" },
-  { id:"creche",  nom:"Creche HEGP",          site:"HEGP", color:"#58a6ff", ds:"collection://3049c204-2fc5-8189-9aba-000bc58487d2" },
-  { id:"urc",     nom:"Unite Rech. Clinique", site:"HEGP", color:"#58a6ff", ds:"collection://0be2ea00-15b6-4d90-b1e8-82d1fb4ae7c0" },
+  { id:"challan",  nom:"Challancin",       site:"HEGP", color:"#58a6ff", ds:"3069c2042fc5806cb7fbc9c7a43c6cec" },
+  { id:"ph1",      nom:"VGR Phase 1",      site:"VGR",  color:"#3fb950", ds:"2949c2042fc580d0a5ffc262a87357f3" },
+  { id:"ph2",      nom:"VGR Phase 2",      site:"VGR",  color:"#bc8cff", ds:"527b8b87c16f4a9fb1dc9e40628893a7" },
+  { id:"ph3",      nom:"VGR Phase 3",      site:"VGR",  color:"#f0883e", ds:"3a2ae51d2c134ba3838612044ed772d1" },
+  { id:"creche",   nom:"VGR Creche",       site:"VGR",  color:"#3fb950", ds:"29c9c2042fc580259ad2ce37cae2e189" },
+  { id:"ss",       nom:"VGR Sous-Sol",     site:"VGR",  color:"#3fb950", ds:"29c9c2042fc5800bad62d21709449564" },
+  { id:"microbio", nom:"HEGP Microbio",    site:"HEGP", color:"#58a6ff", ds:"2b09c2042fc580fbbe30e33dc2b33edb" },
+  { id:"immu",     nom:"HEGP Immunologie", site:"HEGP", color:"#58a6ff", ds:"3039c2042fc5802889aaff4bf65bda9b" },
+  { id:"creche2",  nom:"HEGP Creche",      site:"HEGP", color:"#58a6ff", ds:"3049c2042fc580b2bc76f1a18bd67854" },
 ];
 
 function etatColor(e) {
