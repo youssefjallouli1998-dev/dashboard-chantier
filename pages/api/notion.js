@@ -17,11 +17,11 @@ export default async function handler(req, res) {
   if (!data.results) return res.json({ taches: [], debug: data });
 
   const taches = data.results.map(p => ({
-    nom:   p.properties["Travaux à faire"]?.title?.[0]?.plain_text || "",
+    nom:   p.properties["Travaux à faire "]?.title?.[0]?.plain_text || "",
     etat:  p.properties["État"]?.status?.name || "",
-    chiff: p.properties["Chiffrage"]?.select?.name || "",
+    chiff: p.properties["Chiffrage "]?.select?.name || "",
     ent:   p.properties["Entreprises"]?.select?.name || "",
-    date:  p.properties["Date début"]?.date?.start || "",
+    date:  p.properties["Date début "]?.date?.start || "",
   }));
 
   res.json({ taches });
