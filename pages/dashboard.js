@@ -12,17 +12,17 @@ const CHANTIERS = [
 ];
 
 function etatColor(e) {
-  if (e === "Termine") return "#3fb950";
+  if (e === "Terminé") return "#3fb950";
   if (e === "En cours") return "#d29922";
   return "#7d8590";
 }
 
 function chiffColor(c) {
   if (!c) return "#7d8590";
-  if (c === "BDC Valide") return "#3fb950";
-  if (c === "BDC emis") return "#58a6ff";
-  if (c === "Devis recu") return "#f0883e";
-  if (c === "Devis non recu") return "#f85149";
+  if (c === "BDC Validé") return "#3fb950";
+  if (c === "BDC émis") return "#58a6ff";
+  if (c === "Devis reçu") return "#f0883e";
+  if (c === "Devis non reçu") return "#f85149";
   return "#7d8590";
 }
 
@@ -100,8 +100,8 @@ export default function Dashboard() {
     setLoadingM(true);
     var ctx = CHANTIERS.map(function(ch) {
       var t = taches[ch.id] || [];
-      var done = t.filter(function(x) { return x.etat === "Termine"; }).length;
-      var reste = t.filter(function(x) { return x.etat !== "Termine"; }).slice(0, 6)
+      var done = t.filter(function(x) { return x.etat === "Terminé"; }).length;
+      var reste = t.filter(function(x) { return x.etat !== "Terminé"; }).slice(0, 6)
         .map(function(x) { return "  - " + x.nom + " | " + x.etat + " | " + (x.chiff || "-") + " | " + (x.ent || "-"); }).join("\n");
       return "== " + ch.nom + " [" + ch.site + "] " + done + "/" + t.length + " terminees ==\n" + (reste || "  Aucune tache active");
     }).join("\n\n");
@@ -142,10 +142,10 @@ export default function Dashboard() {
     t.forEach(function(x) { allT.push(x); });
   });
 
-  var nDone  = allT.filter(function(t) { return t.etat === "Termine"; }).length;
+  var nDone  = allT.filter(function(t) { return t.etat === "Terminé"; }).length;
   var nCours = allT.filter(function(t) { return t.etat === "En cours"; }).length;
-  var nVisit = allT.filter(function(t) { return t.chiff === "A prevoir" || t.chiff === "Visite a faire" || t.chiff === "Devis non recu"; }).length;
-  var nBDC   = allT.filter(function(t) { return t.chiff === "BDC emis" || t.chiff === "Devis recu"; }).length;
+  var nVisit = allT.filter(function(t) { return t.chiff === "A prévoir" || t.chiff === "Visite à faire" || t.chiff === "Devis non reçu"; }).length;
+  var nBDC   = allT.filter(function(t) { return t.chiff === "BDC émis" || t.chiff === "Devis reçu"; }).length;
   var gp     = allT.length ? Math.round(nDone / allT.length * 100) : 0;
   var pcol   = gp >= 60 ? "#3fb950" : gp >= 30 ? "#d29922" : "#f85149";
   var nLoaded = CHANTIERS.filter(function(ch) { return taches[ch.id] !== undefined; }).length;
@@ -238,10 +238,10 @@ export default function Dashboard() {
               {filtCh.map(function(ch) {
                 var t = taches[ch.id] || [];
                 var isL = loading[ch.id];
-                var done = t.filter(function(x) { return x.etat === "Termine"; }).length;
+                var done = t.filter(function(x) { return x.etat === "Terminé"; }).length;
                 var pct = t.length ? Math.round(done / t.length * 100) : 0;
                 var pc2 = pct >= 75 ? "#3fb950" : pct >= 40 ? "#d29922" : pct > 0 ? "#58a6ff" : "#7d8590";
-                var next5 = t.filter(function(x) { return x.etat !== "Termine"; })
+                var next5 = t.filter(function(x) { return x.etat !== "Terminé"; })
                   .sort(function(a, b) { return (a.date || "9999") < (b.date || "9999") ? -1 : 1; })
                   .slice(0, 5);
 
@@ -301,7 +301,7 @@ export default function Dashboard() {
                       <div style={{ display: "flex", gap: "10px", fontSize: "10px", fontFamily: "monospace", borderTop: "1px solid #21262d", paddingTop: "8px", color: "#7d8590" }}>
                         <span style={{ color: "#3fb950" }}>✓ {done}</span>
                         <span style={{ color: "#d29922" }}>● {t.filter(function(x) { return x.etat === "En cours"; }).length}</span>
-                        <span>○ {t.filter(function(x) { return x.etat !== "Termine" && x.etat !== "En cours"; }).length}</span>
+                        <span>○ {t.filter(function(x) { return x.etat !== "Terminé" && x.etat !== "En cours"; }).length}</span>
                         <span style={{ marginLeft: "auto" }}>{done}/{t.length} taches</span>
                       </div>
                     )}
