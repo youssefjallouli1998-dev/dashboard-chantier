@@ -15,33 +15,46 @@ export default async function handler(req, res) {
   const data = await response.json();
   if (!data.results) return res.json({ taches: [], debug: data });
 
-  function getProp(props, ...keys) {
-    for (const key of keys) {
-      if (props[key] !== undefined) return props[key];
+  function getTitle(props) {
+    for (const key of Object.keys(props)) {
+      if (props[key].type === "title") {
+        return props[key].title?.[0]?.plain_text || "";
+      }
     }
-    return undefined;
+    return "";
+  }
+
+  function getSelect(props, ...keys) {
+    for (const key of keys) {
+      if (props[key]?.select?.name) return props[key].select.name;
+    }
+    return "";
+  }
+
+  function getStatus(props, ...keys) {
+    for (const key of keys) {
+      if (props[key]?.status?.name) return props[key].status.name;
+    }
+    return "";
+  }
+
+  function getDate(props, ...keys) {
+    for (const key of keys) {
+      if (props[key]?.date?.start) return props[key].date.start;
+    }
+    return "";
   }
 
   const taches = data.results.map(p => {
     const props = p.properties;
-
-    const nomProp = getProp(props, "Travaux à faire ", "Travaux à faire", "Priorité ", "Priorité", "Nom", "Name");
-    const nom = nomProp?.title?.[0]?.plain_text || nomProp?.rich_text?.[0]?.plain_text || nomProp?.text?.[0]?.plain_text || "";
-
-    const etatProp = getProp(props, "État", "Etat");
-    const etat = etatProp?.status?.name || "";
-
-    const chiffProp = getProp(props, "Chiffrage ", "Chiffrage");
-    const chiff = chiffProp?.select?.name || "";
-
-    const entProp = getProp(props, "Entreprises", "Entreprises ", "Entreprise");
-    const ent = entProp?.select?.name || "";
-
-    const dateProp = getProp(props, "Date début ", "Date début", "Date");
-    const date = dateProp?.date?.start || "";
-
-    return { nom, etat, chiff, ent, date };
-  }).filter(t => t.nom && t.nom.trim() !== "");
+    return {
+      nom:   getTitle(props),
+      etat:  getStatus(props, "État", "Etat"),
+      chiff: getSelect(props, "Chiffrage ", "Chiffrage"),
+      ent:   getSelect(props, "Entreprises", "Entreprises ", "Entreprise"),
+      date:  getDate(props, "Date début ", "Date début", "Date"),
+    };
+  }).filter(t => t.nom.trim() !== "");
 
   res.json({ taches });
 }
