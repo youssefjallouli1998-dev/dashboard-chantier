@@ -15,46 +15,13 @@ export default async function handler(req, res) {
   const data = await response.json();
   if (!data.results) return res.json({ taches: [], debug: data });
 
-  function getTitle(props) {
-    for (const key of Object.keys(props)) {
-      if (props[key].type === "title") {
-        return props[key].title?.[0]?.plain_text || "";
-      }
-    }
-    return "";
-  }
-
-  function getSelect(props, ...keys) {
-    for (const key of keys) {
-      if (props[key]?.select?.name) return props[key].select.name;
-    }
-    return "";
-  }
-
-  function getStatus(props, ...keys) {
-    for (const key of keys) {
-      if (props[key]?.status?.name) return props[key].status.name;
-    }
-    return "";
-  }
-
-  function getDate(props, ...keys) {
-    for (const key of keys) {
-      if (props[key]?.date?.start) return props[key].date.start;
-    }
-    return "";
-  }
-
-  const taches = data.results.map(p => {
-    const props = p.properties;
-    return {
-      nom:   getTitle(props),
-      etat:  getStatus(props, "État", "Etat"),
-      chiff: getSelect(props, "Chiffrage ", "Chiffrage"),
-      ent:   getSelect(props, "Entreprises", "Entreprises ", "Entreprise"),
-      date:  getDate(props, "Date début ", "Date début", "Date"),
-    };
-  }).filter(t => t.nom.trim() !== "");
+  const taches = data.results.map(p => ({
+    nom:   p.properties["Travaux à faire "]?.title?.[0]?.plain_text || p.properties["Travaux à faire"]?.title?.[0]?.plain_text || "",
+    etat:  p.properties["État"]?.status?.name || "",
+    chiff: p.properties["Chiffrage "]?.select?.name || p.properties["Chiffrage"]?.select?.name || "",
+    ent:   p.properties["Entreprises"]?.select?.name || p.properties["Entreprises "]?.select?.name || "",
+    date:  p.properties["Date début "]?.date?.start || p.properties["Date début"]?.date?.start || p.properties["Date"]?.date?.start || "",
+  })).filter(t => t.nom.trim() !== "");
 
   res.json({ taches });
 }
