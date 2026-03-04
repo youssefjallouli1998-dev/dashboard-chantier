@@ -13,16 +13,35 @@ export default async function handler(req, res) {
   });
 
   const data = await response.json();
-
   if (!data.results) return res.json({ taches: [], debug: data });
 
-  const taches = data.results.map(p => ({
-    nom:   p.properties["Travaux à faire "]?.title?.[0]?.plain_text || "",
-    etat:  p.properties["État"]?.status?.name || "",
-    chiff: p.properties["Chiffrage "]?.select?.name || "",
-    ent:   p.properties["Entreprises"]?.select?.name || "",
-    date:  p.properties["Date début "]?.date?.start || "",
-  }));
+  function getProp(props, ...keys) {
+    for (const key of keys) {
+      if (props[key] !== undefined) return props[key];
+    }
+    return undefined;
+  }
+
+  const taches = data.results.map(p => {
+    const props = p.properties;
+
+    const nomProp = getProp(props, "Travaux à faire ", "Travaux à faire");
+    const nom = nomProp?.title?.[0]?.plain_text || "";
+
+    const etatProp = getProp(props, "État", "Etat");
+    const etat = etatProp?.status?.name || "";
+
+    const chiffProp = getProp(props, "Chiffrage ", "Chiffrage");
+    const chiff = chiffProp?.select?.name || "";
+
+    const entProp = getProp(props, "Entreprises", "Entreprise");
+    const ent = entProp?.select?.name || "";
+
+    const dateProp = getProp(props, "Date début ", "Date début", "Date");
+    const date = dateProp?.date?.start || "";
+
+    return { nom, etat, chiff, ent, date };
+  });
 
   res.json({ taches });
 }
