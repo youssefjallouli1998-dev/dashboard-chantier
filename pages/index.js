@@ -1,3 +1,8 @@
+import { useEffect } from 'react';
+import { useRouter } from 'next/router';
+
 export default function Home() {
-  return <meta httpEquiv="refresh" content="0;url=/dashboard" />;
+  const router = useRouter();
+  useEffect(() => { router.replace('/dashboard'); }, []);
+  return null;
 }

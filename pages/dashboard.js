@@ -1,400 +1,378 @@
-import { useState } from "react";
+import { useState, useEffect } from 'react';
+import { useRouter } from 'next/router';
+import { Plus, X, AlertTriangle, ChevronDown } from 'lucide-react';
+import Layout from '../components/Layout';
+import { Badge, StatutBadge, ProgressBar, KpiCard, Modal, FormField, inputStyle, selectStyle, Btn, SectionTitle, formatEuro } from '../components/ui';
 
-const CHANTIERS = [
-  { id:"challan",  nom:"Challancin",       site:"HEGP", color:"#58a6ff", ds:"3069c2042fc5806cb7fbc9c7a43c6cec" },
-  { id:"ph1",      nom:"VGR Phase 1",      site:"VGR",  color:"#3fb950", ds:"2949c2042fc580d0a5ffc262a87357f3" },
-  { id:"ph2",      nom:"VGR Phase 2",      site:"VGR",  color:"#bc8cff", ds:"527b8b87c16f4a9fb1dc9e40628893a7" },
-  { id:"ph3",      nom:"VGR Phase 3",      site:"VGR",  color:"#f0883e", ds:"3a2ae51d2c134ba3838612044ed772d1" },
-  { id:"creche",   nom:"VGR Creche",       site:"VGR",  color:"#3fb950", ds:"29c9c2042fc580259ad2ce37cae2e189" },
-  { id:"ss",       nom:"VGR Sous-Sol",     site:"VGR",  color:"#3fb950", ds:"29c9c2042fc5800bad62d21709449564" },
-  { id:"microbio", nom:"HEGP Microbio",    site:"HEGP", color:"#58a6ff", ds:"2b09c2042fc580fbbe30e33dc2b33edb" },
-  { id:"immu",     nom:"HEGP Immunologie", site:"HEGP", color:"#58a6ff", ds:"3039c2042fc5802889aaff4bf65bda9b" },
-  { id:"creche2",  nom:"HEGP Creche",      site:"HEGP", color:"#58a6ff", ds:"3049c2042fc580b2bc76f1a18bd67854" },
-];
+const SITES = ['HEGP', 'Hôpital Vaugirard'];
+const STATUTS = ['En cours', 'En attente', 'Bloqué', 'Terminé'];
 
-function etatColor(e) {
-  if (e === "Terminé") return "#3fb950";
-  if (e === "En cours") return "#d29922";
-  return "#7d8590";
-}
-
-function chiffColor(c) {
-  if (!c) return "#7d8590";
-  if (c === "BDC Validé") return "#3fb950";
-  if (c === "BDC émis") return "#58a6ff";
-  if (c === "Devis reçu") return "#f0883e";
-  if (c === "Devis non reçu") return "#f85149";
-  return "#7d8590";
-}
-
-function Spin() {
-  return (
-    <span style={{
-      display: "inline-block",
-      width: "12px",
-      height: "12px",
-      border: "2px solid #30363d",
-      borderTopColor: "#58a6ff",
-      borderRadius: "50%",
-      animation: "spin 1s linear infinite"
-    }} />
-  );
-}
-
-function Badge({ children, col }) {
-  const color = col || "#7d8590";
-  return (
-    <span style={{
-      fontSize: "9px",
-      fontFamily: "monospace",
-      padding: "2px 6px",
-      borderRadius: "3px",
-      backgroundColor: color + "22",
-      color: color,
-      whiteSpace: "nowrap",
-      fontWeight: "700"
-    }}>
-      {children}
-    </span>
-  );
+function getAvancement(chantier) {
+  const zones = chantier.zones || [];
+  if (!zones.length) return 0;
+  return Math.round(zones.reduce((s, z) => s + (z.avancement || 0), 0) / zones.length);
 }
 
 export default function Dashboard() {
-  const [taches, setTaches] = useState({});
-  const [loading, setLoading] = useState({});
-  const [filt, setFilt] = useState("tous");
-  const [missions, setMissions] = useState([]);
-  const [loadingM, setLoadingM] = useState(false);
-  const [syncing, setSyncing] = useState(false);
-  const [cmd, setCmd] = useState("");
-  const [cmdRes, setCmdRes] = useState(null);
-  const [cmdLoad, setCmdLoad] = useState(false);
+  const router = useRouter();
+  const [chantiers, setChantiers] = useState([]);
+  const [entreprises, setEntreprises] = useState([]);
+  const [stats, setStats] = useState({});
+  const [alertes, setAlertes] = useState({ retards: [], bloques: [], chantiers_bloques: [] });
+  const [filterSite, setFilterSite] = useState('');
+  const [filterStatut, setFilterStatut] = useState('');
+  const [hovered, setHovered] = useState(null);
+  const [showModal, setShowModal] = useState(false);
+  const [form, setForm] = useState({
+    nom: '', site: 'HEGP', statut: 'En attente', description: '',
+    budget_ht: '', budget_ttc: '', date_debut: '', date_fin_prevue: '',
+    responsable: '', intervenants: [], zones: [{ nom: '' }],
+  });
+  const [saving, setSaving] = useState(false);
 
-  async function syncOne(ch) {
-    setLoading(function(l) { return Object.assign({}, l, { [ch.id]: true }); });
-    try {
-      const res = await fetch("/api/notion", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ ds: ch.ds })
-      });
-      const data = await res.json();
-      const filtered = (data.taches || []).filter(function(x) {
-        return x.nom && !x.nom.includes("Créer");
-      });
-      setTaches(function(t) { return Object.assign({}, t, { [ch.id]: filtered }); });
-    } catch(e) {
-      setTaches(function(t) { return Object.assign({}, t, { [ch.id]: [] }); });
-    }
-    setLoading(function(l) { return Object.assign({}, l, { [ch.id]: false }); });
+  useEffect(() => {
+    loadAll();
+  }, []);
+
+  async function loadAll() {
+    const [ch, ent, st, al] = await Promise.all([
+      fetch('/api/chantiers').then(r => r.json()),
+      fetch('/api/entreprises').then(r => r.json()),
+      fetch('/api/stats').then(r => r.json()),
+      fetch('/api/alertes').then(r => r.json()),
+    ]);
+    setChantiers(ch);
+    setEntreprises(ent);
+    setStats(st);
+    setAlertes(al);
   }
 
-  async function syncAll() {
-    setSyncing(true);
-    for (var i = 0; i < CHANTIERS.length; i++) {
-      await syncOne(CHANTIERS[i]);
-    }
-    setSyncing(false);
+  async function deleteChantier(id, e) {
+    e.stopPropagation();
+    if (!confirm('Supprimer ce chantier ?')) return;
+    await fetch(`/api/chantiers/${id}`, { method: 'DELETE' });
+    loadAll();
   }
 
-  async function genMissions() {
-    setLoadingM(true);
-    var ctx = CHANTIERS.map(function(ch) {
-      var t = taches[ch.id] || [];
-      var done = t.filter(function(x) { return x.etat === "Terminé"; }).length;
-      var reste = t.filter(function(x) { return x.etat !== "Terminé"; }).slice(0, 6)
-        .map(function(x) { return "  - " + x.nom + " | " + x.etat + " | " + (x.chiff || "-") + " | " + (x.ent || "-"); }).join("\n");
-      return "== " + ch.nom + " [" + ch.site + "] " + done + "/" + t.length + " terminees ==\n" + (reste || "  Aucune tache active");
-    }).join("\n\n");
-    try {
-      var res = await fetch("/api/missions", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ ctx: ctx, date: new Date().toLocaleDateString("fr-FR") })
-      });
-      var data = await res.json();
-      if (data.missions) setMissions(data.missions);
-    } catch(e) {}
-    setLoadingM(false);
+  function handleBudgetHT(val) {
+    const ht = parseFloat(val) || 0;
+    setForm(f => ({ ...f, budget_ht: val, budget_ttc: ht ? (ht * 1.2).toFixed(2) : '' }));
   }
 
-  async function execCmd() {
-    if (!cmd.trim()) return;
-    setCmdLoad(true);
-    setCmdRes(null);
-    try {
-      var res = await fetch("/api/commande", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ cmd: cmd, chantiers: CHANTIERS.map(function(c) { return { nom: c.nom, ds: c.ds }; }) })
-      });
-      var data = await res.json();
-      setCmdRes({ ok: true, msg: data.result || "Fait" });
-    } catch(e) {
-      setCmdRes({ ok: false, msg: "Erreur" });
-    }
-    setCmdLoad(false);
-    setCmd("");
+  function toggleIntervenant(nom) {
+    setForm(f => ({
+      ...f,
+      intervenants: f.intervenants.includes(nom)
+        ? f.intervenants.filter(i => i !== nom)
+        : [...f.intervenants, nom],
+    }));
   }
 
-  var allT = [];
-  CHANTIERS.forEach(function(ch) {
-    var t = taches[ch.id] || [];
-    t.forEach(function(x) { allT.push(x); });
+  function addZone() {
+    setForm(f => ({ ...f, zones: [...f.zones, { nom: '' }] }));
+  }
+
+  function removeZone(i) {
+    setForm(f => ({ ...f, zones: f.zones.filter((_, idx) => idx !== i) }));
+  }
+
+  function updateZone(i, val) {
+    setForm(f => {
+      const z = [...f.zones];
+      z[i] = { nom: val };
+      return { ...f, zones: z };
+    });
+  }
+
+  async function saveChantier(e) {
+    e.preventDefault();
+    if (!form.nom.trim()) return;
+    setSaving(true);
+    const payload = {
+      ...form,
+      budget_ht: parseFloat(form.budget_ht) || 0,
+      budget_ttc: parseFloat(form.budget_ttc) || 0,
+      zones: form.zones.filter(z => z.nom.trim()).map(z => ({ nom: z.nom, avancement: 0 })),
+    };
+    await fetch('/api/chantiers', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+    });
+    setSaving(false);
+    setShowModal(false);
+    setForm({ nom: '', site: 'HEGP', statut: 'En attente', description: '', budget_ht: '', budget_ttc: '', date_debut: '', date_fin_prevue: '', responsable: '', intervenants: [], zones: [{ nom: '' }] });
+    loadAll();
+  }
+
+  const filtered = chantiers.filter(c => {
+    if (filterSite && c.site !== filterSite) return false;
+    if (filterStatut && c.statut !== filterStatut) return false;
+    return true;
   });
 
-  var nDone  = allT.filter(function(t) { return t.etat === "Terminé"; }).length;
-  var nCours = allT.filter(function(t) { return t.etat === "En cours"; }).length;
-  var nVisit = allT.filter(function(t) { return t.chiff === "A prévoir" || t.chiff === "Visite à faire" || t.chiff === "Devis non reçu"; }).length;
-  var nBDC   = allT.filter(function(t) { return t.chiff === "BDC émis" || t.chiff === "Devis reçu"; }).length;
-  var gp     = allT.length ? Math.round(nDone / allT.length * 100) : 0;
-  var pcol   = gp >= 60 ? "#3fb950" : gp >= 30 ? "#d29922" : "#f85149";
-  var nLoaded = CHANTIERS.filter(function(ch) { return taches[ch.id] !== undefined; }).length;
-  var filtCh  = CHANTIERS.filter(function(c) { return filt === "tous" || c.site === filt; });
-  var typeCol = { action: "#58a6ff", visite: "#bc8cff", bdc: "#3fb950", decision: "#f0883e" };
+  const alertCount = (alertes.retards?.length || 0) + (alertes.bloques?.length || 0) + (alertes.chantiers_bloques?.length || 0);
 
   return (
-    <div style={{ minHeight: "100vh", background: "#0d1117", color: "#e6edf3", fontFamily: "Segoe UI, sans-serif", display: "flex", flexDirection: "column" }}>
+    <Layout>
       <style>{`
-        @keyframes spin { to { transform: rotate(360deg); } }
-        * { box-sizing: border-box; }
-        body { margin: 0; }
-        ::-webkit-scrollbar { width: 4px; }
-        ::-webkit-scrollbar-thumb { background: #30363d; border-radius: 2px; }
+        .chantier-card:hover { box-shadow: 0 4px 16px rgba(0,85,255,0.10); border-color: var(--blue) !important; }
+        .del-btn { opacity: 0; transition: opacity 0.15s; }
+        .chantier-card:hover .del-btn { opacity: 1; }
+        .add-card:hover { border-color: var(--blue) !important; background: var(--blue-light) !important; }
+        .filter-btn:hover { background: var(--gray-100) !important; }
       `}</style>
 
-      <div style={{ background: "#161b22", borderBottom: "1px solid #21262d", padding: "0 16px", height: "46px", display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-        <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
-          <span style={{ fontSize: "18px" }}>🏗️</span>
-          <strong style={{ fontSize: "14px" }}>Pilotage Chantiers</strong>
-          <span style={{ fontSize: "11px", color: "#7d8590", fontFamily: "monospace" }}>HEGP &amp; Vaugirard</span>
-          <div style={{ width: "1px", height: "18px", background: "#21262d" }} />
-          {["tous", "HEGP", "VGR"].map(function(f) {
-            return (
-              <button key={f} onClick={function() { setFilt(f); }} style={{
-                padding: "4px 10px", borderRadius: "5px",
-                border: filt === f ? "1px solid transparent" : "1px solid #21262d",
-                background: filt === f ? "#58a6ff" : "transparent",
-                color: filt === f ? "#0d1117" : "#7d8590",
-                cursor: "pointer", fontSize: "11px", fontWeight: "600"
-              }}>
-                {f === "tous" ? "Tous" : f}
-              </button>
-            );
-          })}
+      {/* Header row */}
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '20px' }}>
+        <div>
+          <h1 style={{ fontFamily: 'Barlow Condensed, sans-serif', fontSize: '28px', color: 'var(--gray-900)' }}>Tableau de bord</h1>
+          <div style={{ fontSize: '13px', color: 'var(--gray-400)' }}>{chantiers.length} chantiers — HEGP & Hôpital Vaugirard</div>
         </div>
-        <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
-          <button onClick={syncAll} disabled={syncing} style={{
-            display: "flex", alignItems: "center", gap: "6px",
-            padding: "6px 14px", borderRadius: "6px", border: "none",
-            background: syncing ? "#1c2330" : "#58a6ff",
-            color: syncing ? "#7d8590" : "#0d1117",
-            cursor: syncing ? "not-allowed" : "pointer", fontSize: "12px", fontWeight: "700"
-          }}>
-            {syncing ? "Sync en cours..." : "Sync Notion"}
-          </button>
-          <span style={{ fontSize: "10px", color: nLoaded > 0 ? "#3fb950" : "#7d8590", fontFamily: "monospace" }}>
-            {nLoaded > 0 ? nLoaded + "/" + CHANTIERS.length + " charges" : "Non charge"}
+        <Btn onClick={() => setShowModal(true)}>
+          <Plus size={15} /> Nouveau chantier
+        </Btn>
+      </div>
+
+      {/* Alert banner */}
+      {alertCount > 0 && (
+        <div
+          onClick={() => router.push('/relances')}
+          style={{
+            background: '#FEF2F2', border: '1px solid #FECACA', borderRadius: '10px',
+            padding: '12px 16px', marginBottom: '20px', cursor: 'pointer',
+            display: 'flex', alignItems: 'center', gap: '10px',
+            transition: 'background 0.15s',
+          }}
+        >
+          <AlertTriangle size={18} color="#EF4444" />
+          <span style={{ fontWeight: 600, color: '#B91C1C', fontSize: '14px' }}>
+            {alertCount} alerte{alertCount > 1 ? 's' : ''} — {alertes.retards?.length || 0} retard{(alertes.retards?.length || 0) > 1 ? 's' : ''}, {alertes.bloques?.length || 0} bloqué{(alertes.bloques?.length || 0) > 1 ? 's' : ''}
           </span>
+          <span style={{ marginLeft: 'auto', color: '#EF4444', fontSize: '12px', fontWeight: 500 }}>Voir les relances →</span>
         </div>
+      )}
+
+      {/* KPIs */}
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '16px', marginBottom: '24px' }}>
+        <KpiCard label="Chantiers" value={stats.total_chantiers || 0} sub={`${stats.en_cours || 0} en cours`} color="var(--blue)" />
+        <KpiCard label="Budget total TTC" value={formatEuro(stats.budget_total_ttc)} sub="tous chantiers" />
+        <KpiCard label="Alertes" value={alertCount} sub={`${stats.retards || 0} en retard`} color={alertCount > 0 ? 'var(--red)' : 'var(--green)'} />
+        <KpiCard label="Tâches" value={stats.taches_total || 0} sub={`avancement global ${stats.avancement_global || 0}%`} />
       </div>
 
-      <div style={{ flex: "1", display: "flex" }}>
-        <div style={{ flex: "1", display: "flex", flexDirection: "column", overflow: "hidden" }}>
+      {/* Filters */}
+      <div style={{ display: 'flex', gap: '8px', marginBottom: '20px', flexWrap: 'wrap' }}>
+        <span style={{ fontSize: '13px', color: 'var(--gray-500)', alignSelf: 'center', marginRight: '4px' }}>Filtrer :</span>
+        {['', ...SITES].map(s => (
+          <button
+            key={s || 'all-sites'}
+            className="filter-btn"
+            onClick={() => setFilterSite(s)}
+            style={{
+              padding: '5px 14px', borderRadius: '20px', fontSize: '13px', fontWeight: filterSite === s ? 600 : 400,
+              border: filterSite === s ? '1.5px solid var(--blue)' : '1px solid var(--gray-200)',
+              background: filterSite === s ? 'var(--blue-light)' : '#fff',
+              color: filterSite === s ? 'var(--blue)' : 'var(--gray-700)',
+              cursor: 'pointer',
+            }}
+          >{s || 'Tous les sites'}</button>
+        ))}
+        <div style={{ width: '1px', background: 'var(--gray-200)', margin: '0 4px' }} />
+        {['', ...STATUTS].map(s => (
+          <button
+            key={s || 'all-statuts'}
+            className="filter-btn"
+            onClick={() => setFilterStatut(s)}
+            style={{
+              padding: '5px 14px', borderRadius: '20px', fontSize: '13px', fontWeight: filterStatut === s ? 600 : 400,
+              border: filterStatut === s ? '1.5px solid var(--blue)' : '1px solid var(--gray-200)',
+              background: filterStatut === s ? 'var(--blue-light)' : '#fff',
+              color: filterStatut === s ? 'var(--blue)' : 'var(--gray-700)',
+              cursor: 'pointer',
+            }}
+          >{s || 'Tous statuts'}</button>
+        ))}
+      </div>
 
-          {nLoaded > 0 && (
-            <div style={{ display: "grid", gridTemplateColumns: "repeat(5, 1fr)", gap: "8px", padding: "10px 14px" }}>
-              {[
-                ["Terminees", nDone, "#3fb950"],
-                ["En cours", nCours, "#d29922"],
-                ["A planifier", nVisit, "#58a6ff"],
-                ["BDC/Devis", nBDC, "#f0883e"],
-                ["Avancement", gp + "%", pcol]
-              ].map(function(item, i) {
-                return (
-                  <div key={i} style={{ background: "#161b22", border: "1px solid #21262d", borderRadius: "9px", padding: "10px 12px" }}>
-                    <div style={{ fontSize: "9px", fontWeight: "700", color: "#7d8590", letterSpacing: ".1em", textTransform: "uppercase", fontFamily: "monospace", marginBottom: "4px" }}>{item[0]}</div>
-                    <div style={{ fontSize: "28px", fontWeight: "800", color: item[2], fontFamily: "monospace", lineHeight: "1" }}>{item[1]}</div>
-                  </div>
-                );
-              })}
-            </div>
-          )}
-
-          {nLoaded === 0 && !syncing && (
-            <div style={{ flex: "1", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: "14px" }}>
-              <div style={{ fontSize: "48px" }}>🔗</div>
-              <strong style={{ fontSize: "16px" }}>Donnees non chargees</strong>
-              <p style={{ color: "#7d8590", fontSize: "13px", textAlign: "center", maxWidth: "300px", lineHeight: "1.6" }}>
-                Clique sur Sync Notion pour charger les vraies taches.
-              </p>
-              <button onClick={syncAll} style={{ padding: "10px 24px", borderRadius: "8px", border: "none", background: "#58a6ff", color: "#0d1117", fontSize: "14px", fontWeight: "700", cursor: "pointer" }}>
-                Charger depuis Notion
+      {/* Grille chantiers */}
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '16px' }}>
+        {filtered.map(c => {
+          const av = getAvancement(c);
+          return (
+            <div
+              key={c.id}
+              className="chantier-card"
+              onClick={() => router.push(`/chantier/${c.id}`)}
+              style={{
+                background: '#fff', border: '1px solid var(--gray-200)', borderRadius: '12px',
+                padding: '16px', cursor: 'pointer', position: 'relative',
+                transition: 'all 0.15s',
+              }}
+            >
+              <button
+                className="del-btn"
+                onClick={e => deleteChantier(c.id, e)}
+                style={{
+                  position: 'absolute', top: '10px', right: '10px',
+                  background: 'var(--gray-100)', border: 'none', borderRadius: '6px',
+                  width: '24px', height: '24px', display: 'flex', alignItems: 'center',
+                  justifyContent: 'center', cursor: 'pointer', color: 'var(--gray-400)',
+                }}
+              >
+                <X size={13} />
               </button>
-            </div>
-          )}
 
-          <div style={{ flex: "1", overflow: "auto", padding: "0 14px 14px" }}>
-            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(280px, 1fr))", gap: "10px" }}>
-              {filtCh.map(function(ch) {
-                var t = taches[ch.id] || [];
-                var isL = loading[ch.id];
-                var done = t.filter(function(x) { return x.etat === "Terminé"; }).length;
-                var pct = t.length ? Math.round(done / t.length * 100) : 0;
-                var pc2 = pct >= 75 ? "#3fb950" : pct >= 40 ? "#d29922" : pct > 0 ? "#58a6ff" : "#7d8590";
-                var next5 = t.filter(function(x) { return x.etat !== "Terminé"; })
-                  .sort(function(a, b) { return (a.date || "9999") < (b.date || "9999") ? -1 : 1; })
-                  .slice(0, 5);
-
-                return (
-                  <div key={ch.id} style={{ background: "#161b22", border: "1px solid #21262d", borderRadius: "10px", padding: "14px", display: "flex", flexDirection: "column", gap: "10px" }}>
-                    <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-                      <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
-                        <span style={{ width: "9px", height: "9px", borderRadius: "50%", background: ch.color, display: "inline-block" }} />
-                        <strong style={{ fontSize: "13px" }}>{ch.nom}</strong>
-                        <Badge col={ch.site === "HEGP" ? "#58a6ff" : "#3fb950"}>{ch.site}</Badge>
-                      </div>
-                      <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
-                        {isL && <Spin />}
-                        {taches[ch.id] && !isL && <span style={{ fontFamily: "monospace", fontSize: "13px", color: pc2, fontWeight: "800" }}>{pct}%</span>}
-                        <button onClick={function() { syncOne(ch); }} disabled={isL} style={{ fontSize: "11px", padding: "2px 7px", borderRadius: "4px", border: "1px solid #30363d", background: "transparent", color: "#7d8590", cursor: isL ? "not-allowed" : "pointer" }}>↻</button>
-                      </div>
-                    </div>
-
-                    {taches[ch.id] && (
-                      <div style={{ height: "3px", background: "#1c2330", borderRadius: "2px", overflow: "hidden" }}>
-                        <div style={{ height: "100%", width: pct + "%", background: pc2, transition: "width 1.2s ease", borderRadius: "2px" }} />
-                      </div>
-                    )}
-
-                    {isL && (
-                      <div style={{ color: "#7d8590", fontSize: "12px", display: "flex", alignItems: "center", gap: "8px", padding: "8px 0" }}>
-                        <Spin /> Chargement Notion...
-                      </div>
-                    )}
-
-                    {!isL && taches[ch.id] && next5.length === 0 && (
-                      <div style={{ fontSize: "12px", color: "#3fb950", textAlign: "center", padding: "8px 0" }}>
-                        Toutes les taches terminees
-                      </div>
-                    )}
-
-                    {!isL && taches[ch.id] && next5.length > 0 && (
-                      <div style={{ display: "flex", flexDirection: "column", gap: "4px" }}>
-                        <div style={{ fontSize: "9px", fontWeight: "700", color: "#7d8590", letterSpacing: ".08em", textTransform: "uppercase", fontFamily: "monospace" }}>
-                          5 prochaines missions
-                        </div>
-                        {next5.map(function(x, i) {
-                          return (
-                            <div key={i} style={{ display: "flex", alignItems: "center", gap: "7px", padding: "5px 8px", borderRadius: "6px", background: "#1c2330", border: "1px solid #21262d" }}>
-                              <span style={{ width: "6px", height: "6px", borderRadius: "50%", background: etatColor(x.etat), flexShrink: "0" }} />
-                              <span style={{ fontSize: "12px", flex: "1", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{x.nom}</span>
-                              {x.ent && <Badge col="#7d8590">{x.ent}</Badge>}
-                              {x.chiff && <Badge col={chiffColor(x.chiff)}>{x.chiff}</Badge>}
-                              {x.date && <span style={{ fontSize: "9px", color: "#7d8590", fontFamily: "monospace", flexShrink: "0" }}>{x.date.slice(5)}</span>}
-                            </div>
-                          );
-                        })}
-                      </div>
-                    )}
-
-                    {!isL && taches[ch.id] && (
-                      <div style={{ display: "flex", gap: "10px", fontSize: "10px", fontFamily: "monospace", borderTop: "1px solid #21262d", paddingTop: "8px", color: "#7d8590" }}>
-                        <span style={{ color: "#3fb950" }}>✓ {done}</span>
-                        <span style={{ color: "#d29922" }}>● {t.filter(function(x) { return x.etat === "En cours"; }).length}</span>
-                        <span>○ {t.filter(function(x) { return x.etat !== "Terminé" && x.etat !== "En cours"; }).length}</span>
-                        <span style={{ marginLeft: "auto" }}>{done}/{t.length} taches</span>
-                      </div>
-                    )}
-                  </div>
-                );
-              })}
-            </div>
-          </div>
-        </div>
-
-        <div style={{ width: "310px", background: "#161b22", borderLeft: "1px solid #21262d", display: "flex", flexDirection: "column", overflow: "hidden" }}>
-          <div style={{ padding: "12px 14px 10px", display: "flex", alignItems: "center", justifyContent: "space-between", borderBottom: "1px solid #21262d" }}>
-            <span style={{ fontSize: "9px", fontWeight: "700", color: "#7d8590", letterSpacing: ".1em", textTransform: "uppercase", fontFamily: "monospace" }}>5 Prochaines missions</span>
-            <button onClick={genMissions} disabled={loadingM || nLoaded === 0} style={{
-              display: "flex", alignItems: "center", gap: "5px",
-              padding: "5px 12px", borderRadius: "6px", border: "none",
-              background: (loadingM || nLoaded === 0) ? "#1c2330" : "#f0883e",
-              color: (loadingM || nLoaded === 0) ? "#7d8590" : "#0d1117",
-              cursor: (loadingM || nLoaded === 0) ? "not-allowed" : "pointer",
-              fontSize: "11px", fontWeight: "700"
-            }}>
-              {loadingM ? "Analyse..." : "Generer"}
-            </button>
-          </div>
-
-          <div style={{ flex: "1", overflow: "auto", padding: "12px" }}>
-            {missions.length === 0 && !loadingM && (
-              <div style={{ color: "#7d8590", fontSize: "12px", textAlign: "center", padding: "28px 16px", lineHeight: "1.7" }}>
-                <div style={{ fontSize: "30px", marginBottom: "10px" }}>🎯</div>
-                Sync Notion puis Generer pour voir les 5 actions prioritaires
-              </div>
-            )}
-            {loadingM && (
-              <div style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: "8px", padding: "30px 0", color: "#7d8590", fontSize: "12px" }}>
-                <Spin /> Analyse...
-              </div>
-            )}
-            {missions.map(function(m, i) {
-              var borderColor = m.prio === 1 ? "#f85149" : m.prio === 2 ? "#f0883e" : "#7d8590";
-              var badgeCol = typeCol[m.type] || "#7d8590";
-              var siteCol = m.site === "HEGP" ? "#58a6ff" : "#3fb950";
-              return (
-                <div key={i} style={{ background: "#1c2330", border: "1px solid #30363d", borderLeft: "3px solid " + borderColor, borderRadius: "8px", padding: "12px", marginBottom: "8px" }}>
-                  <div style={{ display: "flex", gap: "5px", marginBottom: "7px", alignItems: "center" }}>
-                    <Badge col={badgeCol}>{(m.type || "action").toUpperCase()}</Badge>
-                    <Badge col={siteCol}>{m.site}</Badge>
-                    <span style={{ fontSize: "9px", fontFamily: "monospace", color: "#7d8590", marginLeft: "auto" }}>#{m.prio}</span>
-                  </div>
-                  <div style={{ fontSize: "13px", fontWeight: "600", lineHeight: "1.4", marginBottom: "5px" }}>{m.titre}</div>
-                  <div style={{ fontSize: "10px", color: "#7d8590", fontFamily: "monospace", lineHeight: "1.4" }}>{m.chantier} — {m.raison}</div>
+              <div style={{ display: 'flex', alignItems: 'flex-start', gap: '8px', marginBottom: '10px', paddingRight: '28px' }}>
+                <div style={{ flex: 1 }}>
+                  <div style={{ fontWeight: 600, fontSize: '14px', color: 'var(--gray-900)', marginBottom: '4px', lineHeight: 1.3 }}>{c.nom}</div>
+                  <div style={{ fontSize: '12px', color: 'var(--gray-400)' }}>{c.site}</div>
                 </div>
-              );
-            })}
-          </div>
-
-          <div style={{ borderTop: "1px solid #21262d", padding: "10px 12px", background: "#0d1117" }}>
-            <div style={{ fontSize: "9px", fontWeight: "700", color: "#7d8590", letterSpacing: ".1em", textTransform: "uppercase", fontFamily: "monospace", marginBottom: "8px" }}>
-              Commande Notion
-            </div>
-            <textarea
-              value={cmd}
-              onChange={function(e) { setCmd(e.target.value); }}
-              onKeyDown={function(e) { if (e.key === "Enter" && e.ctrlKey) execCmd(); }}
-              placeholder={"Ex: Marquer Regrerage Termine\n(Ctrl+Entree pour envoyer)"}
-              rows={2}
-              style={{ width: "100%", background: "#161b22", border: "1px solid #30363d", borderRadius: "6px", color: "#e6edf3", fontSize: "12px", padding: "8px 10px", resize: "none", lineHeight: "1.5", fontFamily: "Segoe UI, sans-serif" }}
-            />
-            <div style={{ display: "flex", justifyContent: "flex-end", marginTop: "6px" }}>
-              <button onClick={execCmd} disabled={cmdLoad || !cmd.trim()} style={{
-                display: "flex", alignItems: "center", gap: "5px",
-                padding: "6px 14px", borderRadius: "6px", border: "none",
-                background: (cmdLoad || !cmd.trim()) ? "#1c2330" : "#bc8cff",
-                color: (cmdLoad || !cmd.trim()) ? "#7d8590" : "#0d1117",
-                cursor: (cmdLoad || !cmd.trim()) ? "not-allowed" : "pointer",
-                fontSize: "12px", fontWeight: "700"
-              }}>
-                {cmdLoad ? "Execution..." : "Executer"}
-              </button>
-            </div>
-            {cmdRes && (
-              <div style={{
-                marginTop: "8px", padding: "8px 10px", borderRadius: "6px",
-                background: cmdRes.ok ? "rgba(63,185,80,.1)" : "rgba(248,81,73,.1)",
-                border: "1px solid " + (cmdRes.ok ? "rgba(63,185,80,.25)" : "rgba(248,81,73,.25)"),
-                fontSize: "11px", color: cmdRes.ok ? "#3fb950" : "#f85149", lineHeight: "1.5"
-              }}>
-                {cmdRes.msg}
+                <StatutBadge statut={c.statut} />
               </div>
-            )}
+
+              <div style={{ marginBottom: '10px' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '12px', color: 'var(--gray-500)', marginBottom: '5px' }}>
+                  <span>Avancement</span>
+                  <span style={{ fontWeight: 600 }}>{av}%</span>
+                </div>
+                <ProgressBar value={av} size="sm" />
+              </div>
+
+              <div style={{ display: 'flex', flexWrap: 'wrap', gap: '4px', marginBottom: '10px' }}>
+                {(c.zones || []).slice(0, 3).map((z, i) => (
+                  <span key={i} style={{
+                    fontSize: '11px', padding: '2px 8px', borderRadius: '5px',
+                    background: 'var(--gray-100)', color: 'var(--gray-500)',
+                  }}>{z.nom}</span>
+                ))}
+                {(c.zones || []).length > 3 && (
+                  <span style={{ fontSize: '11px', padding: '2px 8px', borderRadius: '5px', background: 'var(--gray-100)', color: 'var(--gray-400)' }}>
+                    +{c.zones.length - 3}
+                  </span>
+                )}
+              </div>
+
+              <div style={{ borderTop: '1px solid var(--gray-100)', paddingTop: '8px', fontSize: '12px', color: 'var(--gray-400)', fontWeight: 500 }}>
+                {formatEuro(c.budget_ttc)} TTC
+              </div>
+            </div>
+          );
+        })}
+
+        {/* Carte + */}
+        <div
+          className="add-card"
+          onClick={() => setShowModal(true)}
+          style={{
+            border: '2px dashed var(--gray-300)', borderRadius: '12px', padding: '16px',
+            cursor: 'pointer', display: 'flex', flexDirection: 'column',
+            alignItems: 'center', justifyContent: 'center', gap: '8px',
+            minHeight: '160px', transition: 'all 0.15s',
+          }}
+        >
+          <div style={{ width: '36px', height: '36px', borderRadius: '50%', background: 'var(--gray-100)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+            <Plus size={18} color="var(--gray-400)" />
           </div>
+          <span style={{ fontSize: '13px', color: 'var(--gray-400)', fontWeight: 500 }}>Nouveau chantier</span>
         </div>
       </div>
-    </div>
+
+      {/* Modal création */}
+      <Modal open={showModal} onClose={() => setShowModal(false)} title="Nouveau chantier" width="620px">
+        <form onSubmit={saveChantier}>
+          <SectionTitle>Informations générales</SectionTitle>
+          <FormField label="Nom du chantier" required>
+            <input style={inputStyle} value={form.nom} onChange={e => setForm(f => ({ ...f, nom: e.target.value }))} placeholder="Ex : Vestiaires Challancin HEGP" required />
+          </FormField>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
+            <FormField label="Site">
+              <select style={selectStyle} value={form.site} onChange={e => setForm(f => ({ ...f, site: e.target.value }))}>
+                {SITES.map(s => <option key={s}>{s}</option>)}
+              </select>
+            </FormField>
+            <FormField label="Statut">
+              <select style={selectStyle} value={form.statut} onChange={e => setForm(f => ({ ...f, statut: e.target.value }))}>
+                {STATUTS.map(s => <option key={s}>{s}</option>)}
+              </select>
+            </FormField>
+          </div>
+          <FormField label="Description">
+            <textarea style={{ ...inputStyle, resize: 'vertical', minHeight: '64px' }} value={form.description} onChange={e => setForm(f => ({ ...f, description: e.target.value }))} />
+          </FormField>
+
+          <SectionTitle>Budget</SectionTitle>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
+            <FormField label="Budget HT (€)">
+              <input style={inputStyle} type="number" step="0.01" value={form.budget_ht} onChange={e => handleBudgetHT(e.target.value)} placeholder="0" />
+            </FormField>
+            <FormField label="Budget TTC (€) — calculé ×1.2">
+              <input style={{ ...inputStyle, background: 'var(--gray-50)' }} type="number" step="0.01" value={form.budget_ttc} onChange={e => setForm(f => ({ ...f, budget_ttc: e.target.value }))} placeholder="0" />
+            </FormField>
+          </div>
+
+          <SectionTitle>Planning</SectionTitle>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
+            <FormField label="Date de début">
+              <input style={inputStyle} type="date" value={form.date_debut} onChange={e => setForm(f => ({ ...f, date_debut: e.target.value }))} />
+            </FormField>
+            <FormField label="Date de fin prévue">
+              <input style={inputStyle} type="date" value={form.date_fin_prevue} onChange={e => setForm(f => ({ ...f, date_fin_prevue: e.target.value }))} />
+            </FormField>
+          </div>
+
+          <SectionTitle>Équipe & Intervenants</SectionTitle>
+          <FormField label="Responsable">
+            <input style={inputStyle} value={form.responsable} onChange={e => setForm(f => ({ ...f, responsable: e.target.value }))} placeholder="Nom du responsable" />
+          </FormField>
+          <FormField label="Entreprises intervenantes">
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px' }}>
+              {entreprises.map(ent => {
+                const sel = form.intervenants.includes(ent.nom);
+                return (
+                  <button
+                    key={ent.id}
+                    type="button"
+                    onClick={() => toggleIntervenant(ent.nom)}
+                    style={{
+                      padding: '4px 12px', borderRadius: '20px', fontSize: '12px', fontWeight: sel ? 600 : 400,
+                      border: sel ? '1.5px solid var(--blue)' : '1px solid var(--gray-200)',
+                      background: sel ? 'var(--blue-light)' : '#fff',
+                      color: sel ? 'var(--blue)' : 'var(--gray-600)',
+                      cursor: 'pointer',
+                    }}
+                  >{ent.nom}</button>
+                );
+              })}
+            </div>
+          </FormField>
+
+          <SectionTitle>Zones du chantier</SectionTitle>
+          {form.zones.map((z, i) => (
+            <div key={i} style={{ display: 'flex', gap: '8px', marginBottom: '8px' }}>
+              <input
+                style={{ ...inputStyle, flex: 1 }}
+                value={z.nom}
+                onChange={e => updateZone(i, e.target.value)}
+                placeholder={`Zone ${i + 1}`}
+              />
+              {form.zones.length > 1 && (
+                <button type="button" onClick={() => removeZone(i)} style={{ border: 'none', background: 'var(--gray-100)', borderRadius: '6px', padding: '0 10px', cursor: 'pointer', color: 'var(--gray-400)' }}>
+                  <X size={14} />
+                </button>
+              )}
+            </div>
+          ))}
+          <Btn variant="ghost" size="sm" onClick={addZone} type="button">
+            <Plus size={13} /> Ajouter une zone
+          </Btn>
+
+          <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '10px', marginTop: '24px', borderTop: '1px solid var(--gray-100)', paddingTop: '16px' }}>
+            <Btn variant="secondary" onClick={() => setShowModal(false)} type="button">Annuler</Btn>
+            <Btn type="submit" disabled={saving}>{saving ? 'Enregistrement…' : 'Créer le chantier'}</Btn>
+          </div>
+        </form>
+      </Modal>
+    </Layout>
   );
 }
