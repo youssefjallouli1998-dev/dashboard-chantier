@@ -1,8 +1,8 @@
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/router';
-import { Plus, X, AlertTriangle, ChevronDown } from 'lucide-react';
+import { Plus, X, AlertTriangle } from 'lucide-react';
 import Layout from '../components/Layout';
-import { Badge, StatutBadge, ProgressBar, KpiCard, Modal, FormField, inputStyle, selectStyle, Btn, SectionTitle, formatEuro } from '../components/ui';
+import { StatutBadge, ProgressBar, KpiCard, Modal, FormField, inputStyle, selectStyle, Btn, SectionTitle, formatEuro } from '../components/ui';
 
 const SITES = ['HEGP', 'Hôpital Vaugirard'];
 const STATUTS = ['En cours', 'En attente', 'Bloqué', 'Terminé'];
@@ -21,7 +21,6 @@ export default function Dashboard() {
   const [alertes, setAlertes] = useState({ retards: [], bloques: [], chantiers_bloques: [] });
   const [filterSite, setFilterSite] = useState('');
   const [filterStatut, setFilterStatut] = useState('');
-  const [hovered, setHovered] = useState(null);
   const [showModal, setShowModal] = useState(false);
   const [form, setForm] = useState({
     nom: '', site: 'HEGP', statut: 'En attente', description: '',
@@ -29,9 +28,11 @@ export default function Dashboard() {
     responsable: '', intervenants: [], zones: [{ nom: '' }],
   });
   const [saving, setSaving] = useState(false);
+  const [budgetSheet, setBudgetSheet] = useState(null);
 
   useEffect(() => {
     loadAll();
+    fetch('/api/budget').then(r => r.ok ? r.json() : null).then(d => { if (d) setBudgetSheet(d); }).catch(() => {});
   }, []);
 
   async function loadAll() {
@@ -156,9 +157,14 @@ export default function Dashboard() {
       {/* KPIs */}
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '16px', marginBottom: '24px' }}>
         <KpiCard label="Chantiers" value={stats.total_chantiers || 0} sub={`${stats.en_cours || 0} en cours`} color="var(--blue)" />
-        <KpiCard label="Budget total TTC" value={formatEuro(stats.budget_total_ttc)} sub="tous chantiers" />
+        <KpiCard
+          label="Budget total TTC"
+          value={budgetSheet ? formatEuro(budgetSheet.total_ttc) : '—'}
+          sub={budgetSheet ? `HT ${formatEuro(budgetSheet.total_ht)} · ${budgetSheet.nb_lignes} lignes` : 'Chargement…'}
+          color="var(--blue)"
+        />
         <KpiCard label="Alertes" value={alertCount} sub={`${stats.retards || 0} en retard`} color={alertCount > 0 ? 'var(--red)' : 'var(--green)'} />
-        <KpiCard label="Tâches" value={stats.taches_total || 0} sub={`avancement global ${stats.avancement_global || 0}%`} />
+        <KpiCard label="Chantiers Notion" value={stats.total_chantiers || 0} sub={`${stats.en_cours || 0} en cours · ${stats.termines || 0} terminés`} />
       </div>
 
       {/* Filters */}

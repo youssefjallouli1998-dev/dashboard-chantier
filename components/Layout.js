@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/router';
-import { Home, Building2, Bell } from 'lucide-react';
+import { Home, Building2, Bell, Euro } from 'lucide-react';
 
 export default function Layout({ children }) {
   const router = useRouter();
@@ -19,6 +19,7 @@ export default function Layout({ children }) {
 
   const navItems = [
     { href: '/dashboard', label: 'Chantiers', icon: Home },
+    { href: '/budget', label: 'Budget', icon: Euro },
     { href: '/entreprises', label: 'Entreprises', icon: Building2 },
     { href: '/relances', label: 'Relances', icon: Bell, badge: alertCount },
   ];
